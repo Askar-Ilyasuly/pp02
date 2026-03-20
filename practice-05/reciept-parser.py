@@ -2,11 +2,11 @@ import re
 import json
 
 # read the file
-with open("raw.txt", "r", encoding="utf-8") as file:
+with open(r"C:\Users\Askar\Desktop\pp2 (1)\practice-05\raw.txt", "r", encoding="utf-8") as file:
     text = file.read()
 
 # extract all prices
-prices = re.findall(r"\d[\d\s]*,\d{2}", text)
+prices = re.findall(r'Стоимость\n(\d[\d ]*,\d{2})', text)
 
 # extract product names
 products = re.findall(r"\d+\.\n(.+)", text)
