@@ -1,107 +1,157 @@
 import psycopg2
+import csv
+import os
 from connect import connect
 
-# 1. Функция поиска
-def search_contacts(pattern):
+# --- ФУНКЦИИ (Practice 7 & 8) ---
+
+def import_from_csv(filename):
+    # Проверяем наличие файла
+    if not os.path.exists(filename):
+        print(f"❌ Ошибка: Файл не найден по пути: {filename}")
+        return
+
+    with open(filename, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        try:
+            next(reader) # Пропускаем заголовок
+        except StopIteration:
+            print("Файл пуст.")
+            return
+            
+        with connect() as conn:
+            with conn.cursor() as cur:
+                for row in reader:
+                    if len(row) == 2:
+                        cur.execute("""
+                            INSERT INTO contacts (name, phone) 
+                            VALUES (%s, %s) 
+                            ON CONFLICT (name) DO NOTHING
+                        """, row)
+            conn.commit()
+    print(f"✅ CSV импортирован из: {filename}")
+
+def insert_console():
+    name = input("Имя: ")
+    phone = input("Телефон: ")
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO contacts (name, phone) VALUES (%s, %s)", (name, phone))
+        conn.commit()
+    print("Контакт добавлен.")
+
+def update_old():
+    target = input("Кого обновить? ")
+    new_phone = input("Новый телефон: ")
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE contacts SET phone = %s WHERE name = %s", (new_phone, target))
+        conn.commit()
+    print("Данные обновлены.")
+
+def search_func():
+    pattern = input("Что искать? ")
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM get_contacts_by_pattern(%s)", (pattern,))
-            return cur.fetchall()
+            results = cur.fetchall()
+            for row in results: print(row)
+            if not results: print("Ничего не найдено.")
 
-# 2. Процедура Upsert (добавить/обновить)
-def upsert_contact(name, phone):
+def delete_old():
+    target = input("Кого удалить? ")
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM contacts WHERE name = %s", (target,))
+        conn.commit()
+    print("Удалено.")
+
+def get_pagination():
+    try:
+        limit = int(input("Лимит: "))
+        offset = int(input("Смещение (offset): "))
+        with connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_contacts_paginated(%s, %s)", (limit, offset))
+                for row in cur.fetchall(): print(row)
+    except ValueError:
+        print("Ошибка: введите числа.")
+
+# --- ПРОЦЕДУРЫ (Practice 8) ---
+
+def upsert_proc():
+    name = input("Имя: ")
+    phone = input("Телефон: ")
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute("CALL upsert_contact(%s, %s)", (name, phone))
         conn.commit()
+    print("Upsert выполнен.")
 
-# 3. Массовая вставка
-def bulk_add(names_list, phones_list):
+def bulk_insert_proc():
+    names = input("Имена (через запятую): ").split(',')
+    phones = input("Телефоны (через запятую): ").split(',')
+    names = [n.strip() for n in names]
+    phones = [p.strip() for p in phones]
+    
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("CALL bulk_insert_contacts(%s, %s)", (names_list, phones_list))
+            cur.execute("CALL bulk_insert_contacts(%s, %s)", (names, phones))
         conn.commit()
+    print("Массовая вставка завершена.")
 
-# 4. Пагинация
-def get_page(limit, offset):
+def delete_proc():
+    target = input("Имя или телефон для удаления: ")
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM get_contacts_paginated(%s, %s)", (limit, offset))
-            return cur.fetchall()
-
-# 5. Удаление
-def remove_contact(identity):
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute("CALL delete_contact(%s)", (identity,))
+            cur.execute("CALL delete_contact(%s)", (target,))
         conn.commit()
+    print("Удаление выполнено.")
 
+def show_all():
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM contacts ORDER BY id")
+            for row in cur.fetchall(): print(row)
 
-# --- ИНТЕРАКТИВНОЕ МЕНЮ ---
-if __name__ == "__main__":
+# --- МЕНЮ ---
+
+def main():
+    # ПУТЬ ДЛЯ АСКАРА:
+    csv_full_path = r"C:\Users\Askar\Desktop\pp2 (1)\practice-08\contacts.csv"
+
     while True:
         print("\n" + "="*30)
-        print("📞 ТЕЛЕФОННАЯ КНИГА (МЕНЮ)")
-        print("1. Найти контакт (поиск)")
-        print("2. Добавить или обновить контакт")
-        print("3. Добавить несколько контактов (массово)")
-        print("4. Показать все контакты (пагинация)")
-        print("5. Удалить контакт")
-        print("0. Выйти")
+        print("МЕНЮ ТЕЛЕФОННОЙ КНИГИ")
+        print("1. Insert CSV (Путь Аскара)")
+        print("2. Insert console")
+        print("3. Update (old)")
+        print("4. Search (function)")
+        print("5. Delete (old)")
+        print("6. Exit")
+        print("7. Pagination")
+        print("8. Insert/Update (procedure)")
+        print("9. Bulk insert")
+        print("10. Delete (procedure)")
+        print("11. Show all contacts")
         print("="*30)
         
-        choice = input("Выберите действие (0-5): ")
+        choice = input("Выберите пункт: ")
         
-        if choice == '1':
-            pattern = input("Введите имя или номер для поиска: ")
-            results = search_contacts(pattern)
-            if results:
-                print("\nНайдено:")
-                for row in results:
-                    print(f"- Имя: {row[0]}, Телефон: {row[1]}")
-            else:
-                print("\nНичего не найдено.")
-                
-        elif choice == '2':
-            name = input("Введите имя: ")
-            phone = input("Введите телефон: ")
-            upsert_contact(name, phone)
-            print(f"\n✅ Контакт '{name}' успешно сохранен!")
-            
-        elif choice == '3':
-            print("\nВведите данные через запятую (например: Askar, Alina)")
-            names_input = input("Имена: ")
-            phones_input = input("Телефоны: ")
-            
-            # Разделяем строку по запятым и убираем лишние пробелы
-            names = [n.strip() for n in names_input.split(',')]
-            phones = [p.strip() for p in phones_input.split(',')]
-            
-            if len(names) == len(phones):
-                bulk_add(names, phones)
-                print("\n✅ Массовая вставка выполнена (номера короче 10 цифр проигнорированы).")
-            else:
-                print("\n❌ Ошибка: количество имен не совпадает с количеством телефонов!")
-                
-        elif choice == '4':
-            try:
-                limit = int(input("Сколько контактов показать (limit)? (например, 5): "))
-                offset = int(input("С какой записи начать (offset)? (например, 0): "))
-                results = get_page(limit, offset)
-                print("\nСписок контактов:")
-                for i, row in enumerate(results, start=1):
-                    print(f"{i}. Имя: {row[0]}, Телефон: {row[1]}")
-            except ValueError:
-                print("\n❌ Ошибка: нужно вводить только числа.")
-                
-        elif choice == '5':
-            identity = input("Введите имя или номер для удаления: ")
-            remove_contact(identity)
-            print(f"\n🗑️ Запись '{identity}' удалена (если она была в базе).")
-            
-        elif choice == '0':
-            print("\nВыход из программы. До свидания!")
-            break
-            
-        else:
-            print("\n❌ Неверный выбор. Пожалуйста, введите число от 0 до 5.")
+        try:
+            if choice == "1": import_from_csv(csv_full_path)
+            elif choice == "2": insert_console()
+            elif choice == "3": update_old()
+            elif choice == "4": search_func()
+            elif choice == "5": delete_old()
+            elif choice == "6": break
+            elif choice == "7": get_pagination()
+            elif choice == "8": upsert_proc()
+            elif choice == "9": bulk_insert_proc()
+            elif choice == "10": delete_proc()
+            elif choice == "11": show_all()
+        except Exception as e:
+            print(f"Ошибка: {e}")
+
+if __name__ == "__main__":
+    main()
