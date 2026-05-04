@@ -1,0 +1,12 @@
+{
+  "snake_color": [
+    255,
+    255,
+    255
+  ],
+  "grid_overlay": false,
+  "sound": false,
+  "car_color": "red",
+  "difficulty": "normal",
+  "username": "aks'f"
+}
